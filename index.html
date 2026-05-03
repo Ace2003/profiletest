@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>个体画像深层分析器（AI版）</title>
+  <style>
+    :root { --bg:#0f172a;--card:#111827;--soft:#1f2937;--text:#e5e7eb;--muted:#94a3b8;--primary:#38bdf8;--border:#334155;--ok:#34d399;--warn:#f59e0b;--err:#f87171; }
+    *{box-sizing:border-box} body{margin:0;font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:linear-gradient(150deg,#020617,#0f172a 35%,#111827);color:var(--text);min-height:100vh;padding:32px 16px}
+    .container{max-width:1180px;margin:0 auto;display:grid;gap:20px}.card{background:rgba(17,24,39,.9);border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:0 10px 25px rgba(0,0,0,.25)}
+    h1{margin:0 0 8px;font-size:28px}.sub{margin:0;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+    label{font-size:14px;color:#cbd5e1;display:block;margin-bottom:6px}select,textarea,input{width:100%;background:#0b1220;border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px 12px;font-size:14px}
+    textarea{min-height:90px;resize:vertical}.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}button{border:none;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer}
+    .primary{background:var(--primary);color:#082f49}.secondary{background:var(--soft);color:var(--text);border:1px solid var(--border)}
+    .out h3{margin:0 0 8px;color:#7dd3fc;font-size:18px}.out section{margin-bottom:14px;padding-bottom:10px;border-bottom:1px dashed #334155}.out p{margin:0;line-height:1.7;color:#dbeafe;white-space:pre-wrap}
+    .status{margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px;border:1px solid var(--border)}
+    .ok{color:var(--ok)}.warn{color:var(--warn)}.err{color:var(--err)}
+    .hint{font-size:12px;color:#93c5fd;margin-top:6px}
+  </style>
+</head>
+<body>
+  <main class="container">
+    <section class="card">
+      <h1>个体深层画像分析网页（接入AI模型）</h1>
+      <p class="sub">你可以接入 Xiaomi MIMO（或兼容 OpenAI 格式）的 AI API，生成更真实、动态的分析结果。</p>
+    </section>
+
+    <section class="card">
+      <div class="grid">
+        <div><label for="apiBase">AI API Base URL</label><input id="apiBase" placeholder="例如：https://your-mimo-api.example.com/v1" /></div>
+        <div><label for="apiModel">模型名</label><input id="apiModel" placeholder="例如：mimo-chat" /></div>
+      </div>
+      <div class="grid" style="margin-top:12px">
+        <div><label for="apiKey">API Key（仅本地浏览器临时保存）</label><input id="apiKey" type="password" placeholder="sk-..." /><p class="hint">前端直连仅用于演示。生产环境建议改为后端代理，避免暴露密钥。</p></div>
+        <div><label for="useMock">无 Key 时策略</label><select id="useMock"><option value="fallback">自动降级到本地模板分析</option><option value="strict">严格要求AI接口（无Key则报错）</option></select></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="grid">
+        <div><label for="period">时间段</label><select id="period"><option>早晨</option><option>白天</option><option>夜晚</option><option>凌晨</option></select></div>
+        <div><label for="specialTime">特定时间</label><select id="specialTime"><option>工作日</option><option>周末</option><option>节假日</option><option>假期</option></select></div>
+      </div>
+      <div class="grid" style="margin-top: 12px;">
+        <div><label for="appearance">形象（穿着、语言、肢体）</label><textarea id="appearance" placeholder="例如：穿着整洁商务装、语速偏快、目光专注、坐姿挺直"></textarea></div>
+        <div><label for="roleFit">社交角色匹配</label><input id="roleFit" placeholder="例如：偏工作正式 / 休闲随意 / 社交展示" /></div>
+      </div>
+      <div class="grid" style="margin-top: 12px;">
+        <div><label for="behavior">行为模式</label><textarea id="behavior" placeholder="例如：独处学习、刷资讯、与朋友聊天、复盘工作"></textarea></div>
+        <div><label for="motive">行为动机</label><input id="motive" placeholder="例如：获取信息 / 寻求情绪反馈 / 追求收益" /><label for="goal" style="margin-top: 10px;">核心目的</label><select id="goal"><option>更好地生活（信息获取）</option><option>感受刺激与情感反馈</option><option>追求经济利益或生活质量提升</option></select></div>
+      </div>
+      <div class="btns"><button class="primary" id="analyzeBtn">生成分析（优先AI）</button><button class="secondary" id="resetBtn">清空输入</button></div>
+      <div id="status" class="status">状态：待分析</div>
+    </section>
+
+    <section class="card out" id="result"></section>
+  </main>
+
+  <script>
+    const SECTIONS = ["深层心理分析","可能的目的","生活习惯","潜意识模式","生活细节","大致身份与性格描述"];
+
+    function defaultResult() {
+      return {
+        "深层心理分析":"请先填写信息并点击“生成分析（优先AI）”。",
+        "可能的目的":"——",
+        "生活习惯":"——",
+        "潜意识模式":"——",
+        "生活细节":"——",
+        "大致身份与性格描述":"——"
+      };
+    }
+
+    function renderResult(obj){
+      document.getElementById('result').innerHTML = SECTIONS.map(t => `<section><h3>${t}</h3><p>${obj[t] || '——'}</p></section>`).join('');
+    }
+
+    function setStatus(text,type='ok'){ const s=document.getElementById('status'); s.className=`status ${type}`; s.textContent=`状态：${text}`; }
+
+    function buildPrompt(data){
+      return `你是专业心理画像分析助手。请严格输出 JSON，不要输出 markdown。
+JSON键必须为：深层心理分析, 可能的目的, 生活习惯, 潜意识模式, 生活细节, 大致身份与性格描述。
+输入信息：\n${JSON.stringify(data, null, 2)}\n
+要求：
+1) 依据输入推测但避免绝对化结论。
+2) 内容真实、具体、可解释。
+3) 每个键输出 2-5 句中文。
+4) 不得省略任何键。`;
+    }
+
+    function localFallback(data){
+      return {
+        "深层心理分析":`在${data.specialTime}的${data.period}选择“${data.behavior || '当前行为'}”，通常说明其当下关注现实问题处理与心理稳定。外在“${data.appearance || '信息未提供'}”及角色匹配“${data.roleFit || '未明确'}”显示其对外部评价有一定敏感度，可能同时追求效率与被理解。`,
+        "可能的目的":`核心目标大概率是“${data.goal}”。结合“${data.motive || '未填写'}”，其行动更像在换取确定性（信息/情绪/收益），而非随机行为。`,
+        "生活习惯":`${data.period === '早晨' ? '晨型倾向更明显，重视启动效率。' : '可能偏晚间活跃或任务驱动。'}在${data.specialTime}仍保持类似行为，说明习惯有稳定性。`,
+        "潜意识模式":"可能存在结果导向防御、自我复盘频率较高、在独立与情感支持之间摆动等模式。这些更像适应压力的策略，而不必然是问题。",
+        "生活细节":"可能重视时间窗口管理；社交投入更倾向高反馈关系；高压阶段易出现睡眠延后或补偿休息；在消费上偏向长期价值与实用性。",
+        "大致身份与性格描述":"更接近目标驱动型个体（如职场人、学习进阶者或自由职业者）。性格上兼具理性执行与情绪敏感，在群体中常承担可靠执行或协同推进角色。"
+      };
+    }
+
+    async function callAI(data){
+      const apiBase = document.getElementById('apiBase').value.trim().replace(/\/$/, '');
+      const apiKey = document.getElementById('apiKey').value.trim();
+      const model = document.getElementById('apiModel').value.trim();
+      if (!apiBase || !model) throw new Error('请填写 API Base URL 和模型名');
+      if (!apiKey) throw new Error('缺少 API Key');
+
+      const resp = await fetch(`${apiBase}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          temperature: 0.7,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: '你是严谨、克制的中文心理画像分析助手。' },
+            { role: 'user', content: buildPrompt(data) }
+          ]
+        })
+      });
+      if (!resp.ok) throw new Error(`AI请求失败: HTTP ${resp.status}`);
+      const json = await resp.json();
+      const content = json?.choices?.[0]?.message?.content;
+      if (!content) throw new Error('AI返回内容为空');
+      const parsed = JSON.parse(content);
+      for (const key of SECTIONS) if (!parsed[key]) throw new Error(`AI返回缺少字段: ${key}`);
+      return parsed;
+    }
+
+    document.getElementById('analyzeBtn').addEventListener('click', async () => {
+      const data = {
+        period: document.getElementById('period').value,
+        specialTime: document.getElementById('specialTime').value,
+        appearance: document.getElementById('appearance').value.trim(),
+        roleFit: document.getElementById('roleFit').value.trim(),
+        behavior: document.getElementById('behavior').value.trim(),
+        motive: document.getElementById('motive').value.trim(),
+        goal: document.getElementById('goal').value
+      };
+      localStorage.setItem('profile_api_base', document.getElementById('apiBase').value);
+      localStorage.setItem('profile_api_model', document.getElementById('apiModel').value);
+      setStatus('AI分析中...', 'warn');
+      try {
+        const result = await callAI(data);
+        renderResult(result);
+        setStatus('AI分析完成', 'ok');
+      } catch (err) {
+        const mode = document.getElementById('useMock').value;
+        if (mode === 'fallback') {
+          renderResult(localFallback(data));
+          setStatus(`AI失败，已降级本地分析：${err.message}`, 'warn');
+        } else {
+          setStatus(`AI失败：${err.message}`, 'err');
+        }
+      }
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      document.querySelectorAll('textarea, input').forEach(el => el.value = '');
+      document.getElementById('period').selectedIndex = 0;
+      document.getElementById('specialTime').selectedIndex = 0;
+      document.getElementById('goal').selectedIndex = 0;
+      renderResult(defaultResult());
+      setStatus('已重置', 'ok');
+    });
+
+    (function init(){
+      document.getElementById('apiBase').value = localStorage.getItem('profile_api_base') || '';
+      document.getElementById('apiModel').value = localStorage.getItem('profile_api_model') || '';
+      renderResult(defaultResult());
+    })();
+  </script>
+</body>
+</html>
